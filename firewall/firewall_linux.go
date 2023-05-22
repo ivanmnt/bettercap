@@ -55,12 +55,11 @@ func (f LinuxFirewall) enableFeature(filename string, enable bool) error {
 }
 
 func (f LinuxFirewall) IsForwardingEnabled() bool {
-
-	if out, err := ioutil.ReadFile(IPV4ForwardingFile); err != nil {
+	out, err := ioutil.ReadFile(IPV4ForwardingFile)
+	if err != nil {
 		return false
-	} else {
-		return str.Trim(string(out)) == "1"
 	}
+	return str.Trim(string(out)) == "1"
 }
 
 func (f LinuxFirewall) EnableForwarding(enabled bool) error {

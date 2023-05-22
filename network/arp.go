@@ -11,38 +11,37 @@ import (
 type ArpTable map[string]string
 
 var (
-	arpWasParsed = false
-	arpLock      = &sync.RWMutex{}
+	arpLock     // sync.RWMutex is better than &sync.RWMutex{} this way I don't create a new object
 	arpTable     = make(ArpTable)
+	arpWasParsed bool
 )
 
 func ArpUpdate(iface string) (ArpTable, error) {
 	arpLock.Lock()
 	defer arpLock.Unlock()
 
-	// Signal we parsed the ARP table at least once.
 	arpWasParsed = true
 
-	// Run "arp -an" (darwin) or "ip neigh" (linux) and parse the output
 	output, err := core.Exec(ArpCmd, ArpCmdOpts)
 	if err != nil {
 		return arpTable, err
 	}
 
 	newTable := make(ArpTable)
-	for _, line := range strings.Split(output, "\n") {
-		m := ArpTableParser.FindStringSubmatch(line)
-		if len(m) == ArpTableTokens {
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		matches := ArpTableParser.FindStringSubmatch(line)
+		if len(matches) == ArpTableTokens {
 			ipIndex := ArpTableTokenIndex[0]
 			hwIndex := ArpTableTokenIndex[1]
 			ifIndex := ArpTableTokenIndex[2]
 
-			address := m[ipIndex]
-			mac := m[hwIndex]
+			address := matches[ipIndex]
+			mac := matches[hwIndex]
 			ifname := iface
 
 			if ifIndex != -1 {
-				ifname = m[ifIndex]
+				ifname = matches[ifIndex]
 			}
 
 			if ifname == iface {
@@ -57,7 +56,6 @@ func ArpUpdate(iface string) (ArpTable, error) {
 }
 
 func ArpLookup(iface string, address string, refresh bool) (string, error) {
-	// Refresh ARP table if first run or if a force refresh has been instructed.
 	if !ArpParsed() || refresh {
 		if _, err := ArpUpdate(iface); err != nil {
 			return "", err
@@ -67,12 +65,12 @@ func ArpLookup(iface string, address string, refresh bool) (string, error) {
 	arpLock.RLock()
 	defer arpLock.RUnlock()
 
-	// Lookup the hardware address of this ip.
-	if mac, found := arpTable[address]; found {
+	mac, found := arpTable[address]
+	if found {
 		return mac, nil
 	}
 
-	return "", fmt.Errorf("Could not find mac for %s", address)
+	return "", fmt.Errorf("Could not find MAC for %s", address)
 }
 
 func ArpInverseLookup(iface string, mac string, refresh bool) (string, error) {
@@ -97,5 +95,6 @@ func ArpInverseLookup(iface string, mac string, refresh bool) (string, error) {
 func ArpParsed() bool {
 	arpLock.RLock()
 	defer arpLock.RUnlock()
+
 	return arpWasParsed
 }
